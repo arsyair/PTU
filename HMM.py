@@ -11,7 +11,21 @@ N_COMPONENTS = 4  # Jumlah state HMM
 
 def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=SR)
+
+    # 1. Pre-emphasis
+    pre_emphasis = 0.97
+    y = np.append(y[0], y[1:] - pre_emphasis * y[:-1])
+
+    # 2. Trim silence
+    y, _ = librosa.effects.trim(y, top_db=20)
+
+    # 3. Normalisasi amplitudo
+    if np.max(np.abs(y)) != 0:
+        y = y / np.max(np.abs(y))
+
+    # 4. Ekstraksi MFCC
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=N_MFCC)
+
     return mfcc.T  # shape: [frame, fitur]
 
 def load_dataset(split):
