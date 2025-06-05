@@ -7,7 +7,8 @@ from sklearn.metrics import classification_report
 DATA_PATH = "data"
 N_MFCC = 13
 SR = 16000
-N_COMPONENTS = 4  # Jumlah state HMM
+N_COMPONENTS = 6  # Coba tingkatkan komponen HMM
+N_ITER = 1000
 
 def extract_mfcc(file_path):
     y, sr = librosa.load(file_path, sr=SR)
@@ -26,7 +27,14 @@ def extract_mfcc(file_path):
     # 4. Ekstraksi MFCC
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=N_MFCC)
 
-    return mfcc.T  # shape: [frame, fitur]
+    # 5. Ekstraksi delta dan delta-delta MFCC
+    delta = librosa.feature.delta(mfcc)
+    delta2 = librosa.feature.delta(mfcc, order=2)
+
+    # Gabungkan fitur mfcc, delta, dan delta2
+    combined = np.vstack([mfcc, delta, delta2])
+
+    return combined.T  # shape: [frames, fitur]
 
 def load_dataset(split):
     dataset = {}
@@ -46,12 +54,13 @@ def load_dataset(split):
 def train_hmms(train_data):
     models = {}
     for label, features_list in train_data.items():
-        X = np.vstack(features_list)              # semua mfcc digabung
-        lengths = [len(x) for x in features_list] # panjang tiap sample
-        model = hmm.GaussianHMM(n_components=N_COMPONENTS, covariance_type='diag', n_iter=1000)
+        X = np.vstack(features_list)
+        lengths = [len(x) for x in features_list]
+        model = hmm.GaussianHMM(n_components=N_COMPONENTS, covariance_type='diag',
+                                n_iter=N_ITER, random_state=42)
         model.fit(X, lengths)
         models[label] = model
-        print(f"Trained HMM for label: {label}")
+        print(f"✅ Trained HMM for label: {label}")
     return models
 
 def classify_hmm(sample_mfcc, models):
@@ -59,8 +68,9 @@ def classify_hmm(sample_mfcc, models):
     for label, model in models.items():
         try:
             scores[label] = model.score(sample_mfcc)
-        except:
+        except Exception as e:
             scores[label] = -np.inf
+    # Return label dengan skor tertinggi
     return max(scores, key=scores.get)
 
 def evaluate_hmm(test_data, models):
